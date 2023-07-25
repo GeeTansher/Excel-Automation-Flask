@@ -126,7 +126,7 @@ async function uploadFile(formData) {
       // If the response is successful, navigate to the next page
       window.location.href = "/process";
     } else {
-      alert("File upload failed!");
+      alert("Response not OK!");
     }
   } catch (error) {
     console.error("Error during file upload:", error);

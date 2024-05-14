@@ -103,16 +103,16 @@ async function requestWakeLock() {
 }
 
 // Function to release wake lock
-async function releaseWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      const wakeLock = await navigator.wakeLock.release();
-      console.log('Wake lock released:', wakeLock);
-    }
-  } catch (error) {
-    console.error('Could not release wake lock:', error);
-  }
-}
+// async function releaseWakeLock() {
+//   try {
+//     if ('wakeLock' in navigator) {
+//       const wakeLock = await navigator.wakeLock.release();
+//       console.log('Wake lock released:', wakeLock);
+//     }
+//   } catch (error) {
+//     console.error('Could not release wake lock:', error);
+//   }
+// }
 
 
 async function uploadFile(formData) {
@@ -155,5 +155,5 @@ document.getElementById("uploadForm").addEventListener("submit", async function(
   uploadFile(formData);
 
   // Request wake lock when the file upload starts
-  await releaseWakeLock();
+  // await releaseWakeLock();
 });

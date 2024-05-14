@@ -5,10 +5,13 @@ import time
 import win32com.client as win32
 import numpy as np
 from pathlib import Path
-import re
 import sys
+import re
 import pythoncom
 import logging
+from openpyxl.descriptors import (
+    Convertible,
+)
 
 pythoncom.CoInitialize()
 win32c = win32.constants
@@ -18,6 +21,9 @@ app = Flask(__name__, static_url_path='/static')
 
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+master_file_path = Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "master.csv")
+total_file_path = Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "total.csv")
+final_file_path = Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "final.xlsx")
 
 # List of registered users
 users = [
@@ -48,26 +54,24 @@ def get_column_names():
     column_names = df1.columns.tolist()
     return jsonify({'column_names': column_names})
 
-@app.route('/check_final_file', methods=['POST'])
-def check_final_file():
-    if(os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], "final.xlsx"))):
-        return jsonify({'check': "True"})
-    else:
-        return jsonify({'check': "False"})
-
 @app.route('/upload', methods=['POST'])
 def process_files():
     file1 = request.files['file1']
     file2 = request.files['file2']
     
-    file1.save(os.path.join(app.config['UPLOAD_FOLDER'], file1.filename))
-    file2.save(os.path.join(app.config['UPLOAD_FOLDER'], file2.filename))
     
-    convert_xls_to_xlsx(Path(os.path.join(app.config['UPLOAD_FOLDER'], file1.filename)),
-                                Path(os.path.join(app.config['UPLOAD_FOLDER'], "master.xlsx")))
+    # file1.save(Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + file1.filename))
+    # file2.save(Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + file2.filename))
+    file1.save(master_file_path)
+    file2.save(total_file_path)
     
-    convert_xls_to_xlsx(Path(os.path.join(app.config['UPLOAD_FOLDER'], file2.filename)),
-                                Path(os.path.join(app.config['UPLOAD_FOLDER'], "total.xlsx")))
+    
+    
+    # convert_xls_to_xlsx_for_master(Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + file1.filename),
+    #                             Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "master.xlsx"))
+    
+    # convert_xls_to_xlsx_for_total(Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + file2.filename),
+    #                             Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "total.xlsx"))
             
     process_data()
 
@@ -79,7 +83,7 @@ def rendering_processed_data():
 
 @app.route('/download')
 def download_data():
-    output_path = Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "final.xlsx")
+    output_path = final_file_path
 
     def generate():
         with open(output_path, 'rb') as f:
@@ -95,14 +99,18 @@ def download_data():
     return Response(generate(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
-def convert_xls_to_xlsx(inP, outP) -> None:
-    df = pd.read_excel(inP)
-    df.to_excel(outP, index=False, header=True)
+# def convert_xls_to_xlsx_for_master(inP, outP) -> None:
+#     df = pd.read_excel(inP, sheet_name='MD_REPORT_0623_BD')
+#     df.to_excel(outP, index=False, header=True)
     
+# def convert_xls_to_xlsx_for_total(inP, outP) -> None:
+#     df = pd.read_excel(inP)
+#     df.to_excel(outP, index=False, header=True)
     
 def process_data():
     # total data
-    df = pd.read_excel(Path(os.path.join(app.config['UPLOAD_FOLDER'], "total.xlsx")), skiprows=4)
+    # df = pd.read_excel(total_file_path, skiprows=4)
+    df = pd.read_csv(total_file_path, skiprows=4)
     df = df.drop(df.columns[[0, 1]], axis=1)
     df = df.dropna(how='all', axis=1)
     df = df.dropna(how='any', axis=0)
@@ -110,8 +118,7 @@ def process_data():
     df["Sub Station"] = ""
 
     # master data
-    df1 = pd.read_excel(Path(os.path.join(app.config['UPLOAD_FOLDER'], "master.xlsx"))
-                               , usecols=["ACCOUNTNO","SUBSTATION"])
+    df1 = pd.read_csv(master_file_path, usecols=["ACCOUNTNO","SUBSTATION"])
     df1["Account No"] = df1["ACCOUNTNO"]
     df1["Sub Station"] = df1["SUBSTATION"]
     df1 = df1.drop(df1.columns[[0,1]], axis=1)
@@ -122,7 +129,7 @@ def process_data():
     Left_join["Sub Station"] = Left_join["Sub Station_y"]
     Left_join = Left_join.drop('Sub Station_x', axis=1)
     Left_join = Left_join.drop('Sub Station_y', axis=1)
-    Left_join.to_excel(Path(os.path.join(app.config['UPLOAD_FOLDER'], "final.xlsx")), sheet_name = 'main', index = False, header=True)
+    Left_join.to_excel(final_file_path, sheet_name = 'main', index = False, header=True)
 
     
     # sheet name for data
@@ -130,7 +137,7 @@ def process_data():
     
     # file path with file name
     # f_path = Path(r"C:\Data\Python and OpenCV\Excel pivot table automation\Website\uploads\final.xlsx")
-    f_path = Path(os.getcwd() + "\\" + app.config['UPLOAD_FOLDER'] + "\\" + "final.xlsx")
+    f_path = final_file_path
     
     # excel file
     # f_name = 'final.xlsx' # change to your Excel file name
@@ -206,12 +213,13 @@ def run_excel(f_path: Path, sheet_name: str):
     ws1 = wb.Sheets(sheet_name)
     
     # Setup and call pivot_table
-    ws2_name = 'pivot_table'
+    pivot_table_name = 'pivot_table' + ((str)(time.time())).split('.')[0]
+    ws2_name = pivot_table_name
     wb.Sheets.Add().Name = ws2_name
     ws2 = wb.Sheets(ws2_name)
     
     # update the pt_name, pt_rows, pt_cols, pt_filters, pt_fields at your preference
-    pt_name = 'pivot_table'  # pivot table name, must be a string
+    pt_name = pivot_table_name  # pivot table name, must be a string
     pt_rows = ['Sub Station']  # rows of pivot table, must be a list
     pt_cols = ['Collection Date']  # columns of pivot table, must be a list
     pt_filters = []  # filter to be applied on pivot table, must be a list
@@ -233,4 +241,5 @@ def run_excel(f_path: Path, sheet_name: str):
     
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.debug = True
+    app.run(host='127.0.0.1', port=5000)
